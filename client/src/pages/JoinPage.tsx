@@ -83,7 +83,7 @@ export default function JoinPage() {
   if (step === "code") {
     return (
       <div className="container center" style={{ minHeight: "100vh", flexDirection: "column", gap: "1rem" }}>
-        <h1 className="accent">Join Signal Lock</h1>
+        <h1 className="accent">Join First Contact</h1>
         <input placeholder="SESSION CODE" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
         <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
         {error && <p className="warn">{error}</p>}

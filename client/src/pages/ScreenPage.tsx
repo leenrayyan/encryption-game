@@ -39,33 +39,43 @@ export default function ScreenPage() {
 
   return (
     <div className="container center" style={{ minHeight: "100vh", flexDirection: "column", paddingTop: "2rem" }}>
-      <h1 className="accent">SIGNAL LOCK</h1>
+      {status !== "lobby" && (
+        <h1 className="accent" style={{ letterSpacing: "0.18em" }}>FIRST CONTACT</h1>
+      )}
 
       {status === "lobby" && (
-        <div className="stack center" style={{ marginTop: "1rem" }}>
-          <p className="dim">Join from your phone:</p>
-          {code && (
-            <div style={{ background: "#fff", padding: "1rem", borderRadius: 12 }}>
-              <QRCodeSVG value={joinUrl} size={220} />
+        <div className="stack center" style={{ marginTop: "1rem", textAlign: "center" }}>
+          <div className="eyebrow">◦ Incoming · Unknown Origin</div>
+          <h1 className="hero-title">FIRST<b>CONTACT</b></h1>
+          <p className="hero-tag">Something just answered. Decode it before the signal is lost.</p>
+
+          <div className="row center" style={{ gap: "1.5rem", margin: "1rem 0" }}>
+            {code && (
+              <div className="qr-wrap">
+                <QRCodeSVG value={joinUrl} size={200} />
+              </div>
+            )}
+            <div className="stack" style={{ gap: "0.3rem", textAlign: "left" }}>
+              <span className="eyebrow">Join at</span>
+              <b style={{ fontSize: "1.1rem" }}>{window.location.host}/play</b>
+              <span className="eyebrow" style={{ marginTop: "0.6rem" }}>Station code</span>
+              <span className="code-badge" style={{ textAlign: "left" }}>{code}</span>
             </div>
-          )}
-          <p>
-            Code: <span className="accent" style={{ fontSize: "2rem", letterSpacing: "0.2em" }}>{code}</span>
-          </p>
-          <p className="dim">{joinUrl}</p>
-          <div className="panel" style={{ minWidth: 320 }}>
-            <h3>Ground Stations ({view.teams.length})</h3>
+          </div>
+
+          <div className="panel" style={{ minWidth: 340 }}>
+            <div className="eyebrow" style={{ marginBottom: "0.6rem" }}>Ground Stations · {view.teams.length}</div>
             <Scoreboard teams={view.teams} />
           </div>
           <button
             className="primary"
             disabled={view.teams.length === 0}
             onClick={() => brainSingleton?.startGame()}
-            style={{ fontSize: "1.2rem", padding: "0.8em 2em" }}
+            style={{ fontSize: "1.2rem", padding: "0.8em 2.4em", marginTop: "0.5rem" }}
           >
-            Start Mission
+            ▸ Begin Transmission
           </button>
-          <p className="dim">Press Start once — the game runs itself from there.</p>
+          <p className="dim">Press once — the signal takes over from there.</p>
         </div>
       )}
 
