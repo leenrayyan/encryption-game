@@ -68,14 +68,20 @@ export default function HostPage() {
               </button>
             )}
             {status === "round_result" && (
-              <button className="primary" onClick={() => socket.emit("host:nextRound")}>
-                {round && round.roundIndex + 1 >= roundCount ? "Finish Game" : "Next Round"}
+              <button onClick={() => socket.emit("host:nextRound")}>
+                Skip the wait →
               </button>
             )}
             {status !== "finished" && status !== "lobby" && (
               <button className="danger" onClick={() => socket.emit("host:endGame")}>End Game</button>
             )}
           </div>
+
+          {status !== "lobby" && status !== "finished" && (
+            <p className="dim" style={{ marginTop: "0.8rem" }}>
+              The game runs itself — rounds advance automatically when all teams finish or time runs out. You don't need to do anything.
+            </p>
+          )}
         </>
       ) : (
         <p className="dim">Creating session...</p>

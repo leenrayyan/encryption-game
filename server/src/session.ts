@@ -40,6 +40,8 @@ export class Session {
   teams = new Map<string, Team>();
   roundEndsAtMs = 0;
   roundTimer: NodeJS.Timeout | null = null;
+  /** between-rounds timer that auto-advances to the next level */
+  resultTimer: NodeJS.Timeout | null = null;
   /** which finale dilemma the whole room faces, chosen once at game start */
   finaleScenarioIndex = 0;
 

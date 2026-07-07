@@ -24,6 +24,7 @@ export default function ScreenPage() {
   const [roundCount, setRoundCount] = useState(5);
   const [round, setRound] = useState<RoundBroadcast | null>(null);
   const [ending, setEnding] = useState<EndingSummary | null>(null);
+  const [nextStartsAtMs, setNextStartsAtMs] = useState<number | null>(null);
 
   useEffect(() => {
     const socket = getSocket();
@@ -34,11 +35,16 @@ export default function ScreenPage() {
       setRoundCount(s.roundCount);
       setEnding(s.ending);
     });
-    socket.on("round:start", (r) => setRound(r));
+    socket.on("round:start", (r) => {
+      setRound(r);
+      setNextStartsAtMs(null);
+    });
+    socket.on("round:end", (e) => setNextStartsAtMs(e.nextStartsAtMs));
     socket.on("scoreboard:update", ({ teams }) => setTeams(teams));
     return () => {
       socket.off("session:state");
       socket.off("round:start");
+      socket.off("round:end");
       socket.off("scoreboard:update");
     };
   }, []);
@@ -116,7 +122,14 @@ export default function ScreenPage() {
       {status === "round_result" && (
         <div className="stack" style={{ marginTop: "2rem" }}>
           <h2>Signal Stabilizing...</h2>
-          <p className="dim">Ground control is preparing the next transmission.</p>
+          {nextStartsAtMs ? (
+            <div className="row center" style={{ gap: "0.8rem", fontSize: "1.3rem" }}>
+              <span className="dim">Next transmission in</span>
+              <Timer endsAtMs={nextStartsAtMs} />
+            </div>
+          ) : (
+            <p className="dim">Preparing the next transmission.</p>
+          )}
           <div className="panel">
             <Scoreboard teams={teams} />
           </div>

@@ -188,7 +188,12 @@ export interface ServerToClientEvents {
   }) => void;
   "round:start": (broadcast: RoundBroadcast) => void;
   "round:payload": (payload: TeamRoundPayload) => void;
-  "round:end": (payload: { roundIndex: number; correctAnswer: string }) => void;
+  "round:end": (payload: {
+    roundIndex: number;
+    correctAnswer: string;
+    /** when the next round auto-starts (or the game ends), for a countdown */
+    nextStartsAtMs: number | null;
+  }) => void;
   "team:answerUpdate": (payload: { draft: string }) => void;
   "team:locked": (payload: { teamId: string; roundIndex: number }) => void;
   "team:log": (payload: { log: LogEntry[] }) => void;

@@ -31,6 +31,7 @@ export default function JoinPage() {
   const [round, setRound] = useState<RoundBroadcast | null>(null);
   const [payload, setPayload] = useState<TeamRoundPayload | null>(null);
   const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
+  const [nextStartsAtMs, setNextStartsAtMs] = useState<number | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
 
   useEffect(() => {
@@ -46,7 +47,10 @@ export default function JoinPage() {
       setPayload(p);
       setLog(p.log);
     });
-    socket.on("round:end", (e) => setCorrectAnswer(e.correctAnswer));
+    socket.on("round:end", (e) => {
+      setCorrectAnswer(e.correctAnswer);
+      setNextStartsAtMs(e.nextStartsAtMs);
+    });
     socket.on("team:log", ({ log }) => setLog(log));
     socket.on("scoreboard:update", ({ teams }) => setTeams(teams));
     return () => {
@@ -147,7 +151,12 @@ export default function JoinPage() {
               Correct decode: <span className="accent">{correctAnswer}</span>
             </p>
           )}
-          <p className="dim">Waiting for ground control to open the next channel...</p>
+          {nextStartsAtMs && (
+            <div className="row" style={{ alignItems: "center", gap: "0.6rem" }}>
+              <span className="dim">Next transmission in</span>
+              <Timer endsAtMs={nextStartsAtMs} />
+            </div>
+          )}
           <DecodedLog log={log} />
         </div>
       )}

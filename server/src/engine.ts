@@ -15,6 +15,8 @@ type IO = Server<ClientToServerEvents, ServerToClientEvents>;
 const MIN_SCORE = 100;
 const BASE_SCORE = 1000;
 const ATTEMPT_PENALTY = 100;
+/** how long the results + story beat shows before the next level auto-starts */
+const RESULT_DISPLAY_MS = 18000;
 
 export class GameEngine {
   constructor(private io: IO, private session: Session) {}
@@ -68,6 +70,10 @@ export class GameEngine {
   startRound(roundIndex: number): void {
     const meta = ROUND_META[roundIndex];
     if (!meta) return;
+    if (this.session.resultTimer) {
+      clearTimeout(this.session.resultTimer);
+      this.session.resultTimer = null;
+    }
     this.session.roundIndex = roundIndex;
     this.session.status = "in_round";
 
@@ -128,6 +134,10 @@ export class GameEngine {
     this.session.status = "round_result";
     const roundIndex = this.session.roundIndex;
 
+    // The game auto-advances after a short results/story beat — no host needed.
+    const isLastRound = roundIndex + 1 >= this.session.roundCount;
+    const nextStartsAtMs = Date.now() + RESULT_DISPLAY_MS;
+
     for (const team of this.session.teams.values()) {
       const instance = team.currentInstance;
       if (!instance) continue;
@@ -137,14 +147,23 @@ export class GameEngine {
       this.io.to(this.teamRoom(team.id)).emit("round:end", {
         roundIndex,
         correctAnswer: instance.answer,
+        nextStartsAtMs,
       });
       this.io.to(this.teamRoom(team.id)).emit("team:log", { log: this.logFor(team) });
     }
 
     this.broadcastSessionState();
+
+    if (this.session.resultTimer) clearTimeout(this.session.resultTimer);
+    this.session.resultTimer = setTimeout(() => this.advance(), RESULT_DISPLAY_MS);
   }
 
-  nextRound(): void {
+  /** Move to the next round (or finish). Runs automatically; also a manual skip. */
+  advance(): void {
+    if (this.session.resultTimer) {
+      clearTimeout(this.session.resultTimer);
+      this.session.resultTimer = null;
+    }
     if (this.session.status !== "round_result") return;
     const next = this.session.roundIndex + 1;
     if (next >= this.session.roundCount) {
@@ -155,8 +174,14 @@ export class GameEngine {
     this.startRound(next);
   }
 
+  /** Kept for the optional manual "skip" control; advancement is automatic. */
+  nextRound(): void {
+    this.advance();
+  }
+
   endGame(): void {
     if (this.session.roundTimer) clearTimeout(this.session.roundTimer);
+    if (this.session.resultTimer) clearTimeout(this.session.resultTimer);
     this.session.status = "finished";
     this.broadcastSessionState();
   }
