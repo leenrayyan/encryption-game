@@ -1,0 +1,10 @@
+# Netlify hosts the static frontend. All realtime state lives in Firebase RTDB.
+[build]
+  command = "npm install && npm run build:shared && npm run build:client"
+  publish = "client/dist"
+
+# SPA fallback so React Router routes (/play, /screen) resolve.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

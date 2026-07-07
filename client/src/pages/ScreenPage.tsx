@@ -1,152 +1,115 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import type {
-  EndingSummary,
-  RoundBroadcast,
-  SessionStatus,
-  TeamPublicStatus,
-} from "@signal-lock/shared";
-import { getSocket } from "../socket";
 import Scoreboard from "../components/Scoreboard";
 import Timer from "../components/Timer";
+import { BrainEngine, generateCode } from "../game/brain";
+import { subscribeScreen, type ScreenView } from "../game/player";
+
+// One brain per tab, kept across React StrictMode remounts.
+let brainSingleton: BrainEngine | null = null;
 
 export default function ScreenPage() {
-  const [params] = useSearchParams();
-  const urlCode = params.get("code") ?? "";
-  const [codeInput, setCodeInput] = useState(urlCode);
-  const [joined, setJoined] = useState(false);
-  const [error, setError] = useState("");
-
-  const [status, setStatus] = useState<SessionStatus>("lobby");
-  const [code, setCode] = useState(urlCode);
-  const [teams, setTeams] = useState<TeamPublicStatus[]>([]);
-  const [roundCount, setRoundCount] = useState(5);
-  const [round, setRound] = useState<RoundBroadcast | null>(null);
-  const [ending, setEnding] = useState<EndingSummary | null>(null);
-  const [nextStartsAtMs, setNextStartsAtMs] = useState<number | null>(null);
+  const [code, setCode] = useState<string>(() => brainSingleton?.code ?? "");
+  const [view, setView] = useState<ScreenView>({ meta: null, teams: [], ending: null });
 
   useEffect(() => {
-    const socket = getSocket();
-    socket.on("session:state", (s) => {
-      setStatus(s.status);
-      setCode(s.code);
-      setTeams(s.teams);
-      setRoundCount(s.roundCount);
-      setEnding(s.ending);
-    });
-    socket.on("round:start", (r) => {
-      setRound(r);
-      setNextStartsAtMs(null);
-    });
-    socket.on("round:end", (e) => setNextStartsAtMs(e.nextStartsAtMs));
-    socket.on("scoreboard:update", ({ teams }) => setTeams(teams));
+    let cancelled = false;
+    async function boot() {
+      if (!brainSingleton) {
+        const brain = new BrainEngine(generateCode());
+        brainSingleton = brain;
+        await brain.create();
+      }
+      if (cancelled) return;
+      setCode(brainSingleton.code);
+      const unsub = subscribeScreen(brainSingleton.code, setView);
+      return unsub;
+    }
+    let unsub: (() => void) | undefined;
+    boot().then((u) => (unsub = u));
     return () => {
-      socket.off("session:state");
-      socket.off("round:start");
-      socket.off("round:end");
-      socket.off("scoreboard:update");
+      cancelled = true;
+      unsub?.();
     };
   }, []);
 
-  function join(codeToJoin: string) {
-    getSocket().emit("spectator:join", { code: codeToJoin.toUpperCase() }, (res) => {
-      if (res.ok) {
-        setJoined(true);
-        setError("");
-      } else {
-        setError(res.error ?? "Could not connect");
-      }
-    });
-  }
-
-  useEffect(() => {
-    if (urlCode) join(urlCode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (!joined) {
-    return (
-      <div className="container center" style={{ minHeight: "100vh", flexDirection: "column", gap: "1rem" }}>
-        <h2>Open Shared Screen</h2>
-        <input
-          value={codeInput}
-          onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-          placeholder="SESSION CODE"
-          style={{ maxWidth: 240, textAlign: "center", fontSize: "1.5rem" }}
-        />
-        <button className="primary" onClick={() => join(codeInput)}>Connect</button>
-        {error && <p className="warn">{error}</p>}
-      </div>
-    );
-  }
-
+  const status = view.meta?.status ?? "lobby";
+  const roundCount = view.meta?.roundCount ?? 5;
   const joinUrl = `${window.location.origin}/play?code=${code}`;
 
   return (
-    <div className="screen-bg">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h1 className="accent">SIGNAL LOCK</h1>
-        <div className="dim">SESSION {code}</div>
-      </div>
+    <div className="container center" style={{ minHeight: "100vh", flexDirection: "column", paddingTop: "2rem" }}>
+      <h1 className="accent">SIGNAL LOCK</h1>
 
       {status === "lobby" && (
-        <div className="row" style={{ alignItems: "flex-start", gap: "3rem", marginTop: "2rem" }}>
-          <div className="stack center" style={{ flex: "0 0 auto" }}>
-            <div className="qr-wrap">
+        <div className="stack center" style={{ marginTop: "1rem" }}>
+          <p className="dim">Join from your phone:</p>
+          {code && (
+            <div style={{ background: "#fff", padding: "1rem", borderRadius: 12 }}>
               <QRCodeSVG value={joinUrl} size={220} />
             </div>
-            <div className="mono-code">{code}</div>
-            <p className="dim">Scan or go to {window.location.origin}/play</p>
+          )}
+          <p>
+            Code: <span className="accent" style={{ fontSize: "2rem", letterSpacing: "0.2em" }}>{code}</span>
+          </p>
+          <p className="dim">{joinUrl}</p>
+          <div className="panel" style={{ minWidth: 320 }}>
+            <h3>Ground Stations ({view.teams.length})</h3>
+            <Scoreboard teams={view.teams} />
           </div>
-          <div className="panel" style={{ flex: 1 }}>
-            <h3>Ground Stations Online ({teams.length})</h3>
-            <Scoreboard teams={teams} />
-          </div>
+          <button
+            className="primary"
+            disabled={view.teams.length === 0}
+            onClick={() => brainSingleton?.startGame()}
+            style={{ fontSize: "1.2rem", padding: "0.8em 2em" }}
+          >
+            Start Mission
+          </button>
+          <p className="dim">Press Start once — the game runs itself from there.</p>
         </div>
       )}
 
-      {status === "in_round" && round && (
-        <div className="stack" style={{ marginTop: "2rem" }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <h2>Round {round.roundIndex + 1} / {round.roundCount}: {round.title}</h2>
-            <Timer endsAtMs={round.endsAtMs} />
+      {status === "in_round" && view.meta && (
+        <div className="stack" style={{ marginTop: "1.5rem", width: "100%", maxWidth: 900 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <h2>Round {(view.meta.roundIndex ?? 0) + 1}/{roundCount}: {view.meta.title}</h2>
+            {view.meta.roundEndsAtMs && <Timer endsAtMs={view.meta.roundEndsAtMs} />}
           </div>
-          <p className="dim" style={{ fontSize: "1.2rem" }}>{round.storyBeat}</p>
+          <p className="dim" style={{ fontSize: "1.2rem" }}>{view.meta.storyBeat}</p>
           <div className="panel">
-            <Scoreboard teams={teams} />
+            <Scoreboard teams={view.teams} />
           </div>
         </div>
       )}
 
       {status === "round_result" && (
-        <div className="stack" style={{ marginTop: "2rem" }}>
+        <div className="stack" style={{ marginTop: "2rem", width: "100%", maxWidth: 900 }}>
           <h2>Signal Stabilizing...</h2>
-          {nextStartsAtMs ? (
+          {view.meta?.nextStartsAtMs ? (
             <div className="row center" style={{ gap: "0.8rem", fontSize: "1.3rem" }}>
               <span className="dim">Next transmission in</span>
-              <Timer endsAtMs={nextStartsAtMs} />
+              <Timer endsAtMs={view.meta.nextStartsAtMs} />
             </div>
           ) : (
             <p className="dim">Preparing the next transmission.</p>
           )}
           <div className="panel">
-            <Scoreboard teams={teams} />
+            <Scoreboard teams={view.teams} />
           </div>
         </div>
       )}
 
       {status === "finished" && (
-        <div className="stack" style={{ marginTop: "2rem" }}>
-          {ending && (
+        <div className="stack" style={{ marginTop: "2rem", width: "100%", maxWidth: 900 }}>
+          {view.ending && (
             <div className="panel stack" style={{ borderColor: "var(--accent)" }}>
-              <h2 className="accent">{ending.headline}</h2>
-              <p style={{ fontSize: "1.2rem" }}>{ending.detail}</p>
-              {Object.keys(ending.counts).length > 0 && (
+              <h2 className="accent">{view.ending.headline}</h2>
+              <p style={{ fontSize: "1.2rem" }}>{view.ending.detail}</p>
+              {Object.keys(view.ending.counts).length > 0 && (
                 <p className="dim">
                   The room decided:{" "}
-                  {Object.entries(ending.counts)
-                    .map(([id, n]) => `${ending.optionLabels[id] ?? id} — ${n}`)
+                  {Object.entries(view.ending.counts)
+                    .map(([id, n]) => `${view.ending!.optionLabels[id] ?? id} — ${n}`)
                     .join("   ·   ")}
                 </p>
               )}
@@ -154,14 +117,10 @@ export default function ScreenPage() {
           )}
           <h3 className="dim">Final standings</h3>
           <div className="panel">
-            <Scoreboard teams={teams} />
+            <Scoreboard teams={view.teams} />
           </div>
         </div>
       )}
-
-      <div className="dim" style={{ marginTop: "2rem" }}>
-        {roundCount} rounds total
-      </div>
     </div>
   );
 }

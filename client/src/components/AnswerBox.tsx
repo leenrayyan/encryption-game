@@ -1,54 +1,46 @@
 import { useEffect, useRef, useState } from "react";
 import type { Decision } from "@signal-lock/shared";
-import { getSocket } from "../socket";
 
 export default function AnswerBox({
   locked,
   decision,
+  draft,
+  feedback,
+  onDraft,
+  onSubmit,
 }: {
   locked: boolean;
   decision: Decision | null;
+  draft: string;
+  feedback: { result: "locked" | "rejected"; at: number } | null;
+  onDraft: (value: string) => void;
+  onSubmit: (answer: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const [local, setLocal] = useState(draft);
   const [flash, setFlash] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const lastSentRef = useRef("");
+  const editingRef = useRef(false);
 
+  // Keep in sync with a teammate's typing unless we're actively editing.
   useEffect(() => {
-    const socket = getSocket();
-    const onTeamUpdate = ({ draft: incoming }: { draft: string }) => {
-      if (incoming === lastSentRef.current) return;
-      setDraft(incoming);
-    };
-    const onError = ({ message }: { message: string }) => {
-      setFlash(message);
-      setTimeout(() => setFlash(null), 2000);
-    };
-    socket.on("team:answerUpdate", onTeamUpdate);
-    socket.on("error:message", onError);
-    return () => {
-      socket.off("team:answerUpdate", onTeamUpdate);
-      socket.off("error:message", onError);
-    };
-  }, []);
+    if (!editingRef.current) setLocal(draft);
+  }, [draft]);
+
+  // Show a flash when the brain rejects a submission.
+  useEffect(() => {
+    if (feedback?.result === "rejected") {
+      setFlash("Signal rejected — try again.");
+      const t = setTimeout(() => setFlash(null), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [feedback]);
 
   function handleChange(value: string) {
-    setDraft(value);
-    lastSentRef.current = value;
-    getSocket().emit("answer:update", { draft: value });
+    editingRef.current = true;
+    setLocal(value);
+    onDraft(value);
   }
 
-  function submitText() {
-    if (!draft.trim()) return;
-    getSocket().emit("answer:submit", { answer: draft });
-  }
-
-  function submitChoice(id: string) {
-    setPicked(id);
-    getSocket().emit("answer:submit", { answer: id });
-  }
-
-  // ---- Decision round (round 3 impostor, round 5 branch) ----
   if (decision) {
     return (
       <div className="panel stack">
@@ -60,7 +52,10 @@ export default function AnswerBox({
               key={o.id}
               className={picked === o.id ? "primary" : ""}
               disabled={locked}
-              onClick={() => submitChoice(o.id)}
+              onClick={() => {
+                setPicked(o.id);
+                onSubmit(o.id);
+              }}
               style={{ flex: 1, minWidth: 120 }}
             >
               {o.label}
@@ -73,22 +68,24 @@ export default function AnswerBox({
     );
   }
 
-  // ---- Standard decode-and-type round ----
   return (
     <div className="panel stack">
       <h3>Decoded Message</h3>
       <input
-        value={draft}
+        value={local}
         disabled={locked}
         onChange={(e) => handleChange(e.target.value)}
+        onBlur={() => (editingRef.current = false)}
         placeholder="Type your team's answer..."
-        onKeyDown={(e) => e.key === "Enter" && submitText()}
+        onKeyDown={(e) => e.key === "Enter" && local.trim() && onSubmit(local)}
       />
       {flash && <p className="warn">{flash}</p>}
       {locked ? (
         <p className="accent">SIGNAL LOCKED ✓</p>
       ) : (
-        <button className="primary" onClick={submitText}>Submit</button>
+        <button className="primary" onClick={() => local.trim() && onSubmit(local)}>
+          Submit
+        </button>
       )}
     </div>
   );

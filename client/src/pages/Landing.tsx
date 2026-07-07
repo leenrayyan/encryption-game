@@ -9,8 +9,7 @@ export default function Landing() {
       </div>
       <div className="stack" style={{ width: "100%", maxWidth: 360 }}>
         <Link to="/play"><button className="primary" style={{ width: "100%" }}>Join with your phone</button></Link>
-        <Link to="/host"><button style={{ width: "100%" }}>Host controls</button></Link>
-        <Link to="/screen"><button style={{ width: "100%" }}>Open shared screen</button></Link>
+        <Link to="/screen"><button style={{ width: "100%" }}>Run the game (shared screen)</button></Link>
       </div>
     </div>
   );
