@@ -1,7 +1,6 @@
-// Flavor content pools for round generation (client-side copy — the browser
-// runs the game logic now). Kept separate from generators so writing can be
-// tweaked without touching logic.
+// Flavor + content pools for round generation (browser runs the game logic).
 
+// ---- Round 1: Pigpen (approachable visual warm-up) ----
 export const ROUND1_PHRASES = [
   "WE COME IN PEACE",
   "OPEN THE OUTER GATE",
@@ -11,6 +10,7 @@ export const ROUND1_PHRASES = [
   "SIGNAL IS STABLE",
 ];
 
+// ---- Round 2: shift cipher ----
 export const ROUND2_PHRASES = [
   "TRUST THE BEACON",
   "POWER CORE OFFLINE",
@@ -20,8 +20,7 @@ export const ROUND2_PHRASES = [
   "THE ORBIT IS CLEAR",
 ];
 
-// ---- Round 3: trap-signal ----
-// Two genuine orders begin with the codeword; the impostor does not.
+// ---- Round 3: trap-signal (decode all three, TYPE the impostor's order) ----
 export const ROUND3_CODEWORDS = ["ORION", "VEGA", "ATLAS", "LYRA"];
 export const ROUND3_GENUINE = [
   "SEAL THE DECK",
@@ -38,6 +37,7 @@ export const ROUND3_IMPOSTOR = [
   "STAND DOWN NOW",
 ];
 
+// ---- Round 4: keyed layer (Vigenere) ----
 export const ROUND4_KEYWORDS = ["NOVA", "ORBIT", "LUNAR", "ECHO", "COMET", "VOID"];
 export const ROUND4_PHRASES = [
   "THE OTHERS ARE LISTENING",
@@ -48,7 +48,11 @@ export const ROUND4_PHRASES = [
   "THE HOST WORLD IS DYING",
 ];
 
-// ---- Round 5: pigpen finale ----
+// ---- Round 5: Playfair finale (serious cipher + branching ending) ----
+// Messages are Playfair-clean: no J, no adjacent duplicate letters, even length
+// (so no filler letters are inserted and the decode reads cleanly).
+export const PLAYFAIR_KEYWORDS = ["NEBULA", "ORION", "QUASAR", "PULSAR", "COMET"];
+
 export interface FinalScenario {
   message: string;
   prompt: string;
@@ -58,7 +62,7 @@ export interface FinalScenario {
 export const ROUND5_SCENARIOS: FinalScenario[] = [
   {
     message: "THE CORE IS FAILING",
-    prompt: "The reactor is critical. What does your station transmit?",
+    prompt: "Their reactor is dying. What does your station transmit?",
     options: [
       { id: "sever", label: "SEVER THE LINK" },
       { id: "hold", label: "HOLD THE LINE" },
@@ -67,52 +71,52 @@ export const ROUND5_SCENARIOS: FinalScenario[] = [
       sever: {
         headline: "THE LINK IS SEVERED",
         detail:
-          "The stations cut the connection. The alien signal goes silent — the ship is saved, but first contact is lost to the dark. Perhaps that was the safer ending.",
+          "The stations cut the connection. The signal goes silent — the ship is saved, but first contact is lost to the dark. Perhaps that was the safer ending.",
       },
       hold: {
         headline: "THE LINE HOLDS",
         detail:
-          "Against protocol, the crews held the connection open. The core stabilized at the last second — and the signal spoke one final word: thank you.",
+          "Against every protocol, the crews held the connection open. The core stabilized at the last second — and the signal spoke one final word: thank you.",
       },
     },
   },
   {
-    message: "THEY ASK TO COME ABOARD",
-    prompt: "The visitors request docking. Your call?",
+    message: "OUR SIGNAL IS HEARD",
+    prompt: "They know we are listening. What is your reply?",
     options: [
-      { id: "welcome", label: "OPEN THE AIRLOCK" },
-      { id: "refuse", label: "KEEP IT SEALED" },
-    ],
-    endings: {
-      welcome: {
-        headline: "THE AIRLOCK OPENS",
-        detail:
-          "The stations chose trust. What steps aboard is not what anyone expected — and the story of two species begins here, in your hands.",
-      },
-      refuse: {
-        headline: "THE HULL STAYS SEALED",
-        detail:
-          "The crews held the line. The visitors drift away without a word. Safe — but you'll wonder forever what you turned away.",
-      },
-    },
-  },
-  {
-    message: "THE SIGNAL WANTS AN ANSWER",
-    prompt: "First contact awaits your reply.",
-    options: [
-      { id: "reply", label: "SEND A GREETING" },
-      { id: "silent", label: "STAY DARK" },
+      { id: "reply", label: "SEND A REPLY" },
+      { id: "silent", label: "STAY SILENT" },
     ],
     endings: {
       reply: {
-        headline: "A GREETING GOES OUT",
+        headline: "WE REPLIED",
         detail:
-          "Every station transmitted at once. The reply that returns is in your own words, sent back across the stars. We are not alone — and now they know we answered.",
+          "Every station transmitted at once. The answer that returns is in our own words, sent back across the stars. We are not alone — and now they know we answered.",
       },
       silent: {
-        headline: "THE STATIONS STAY DARK",
+        headline: "WE STAYED SILENT",
         detail:
           "You chose silence. The signal fades and does not return. Some doors, once closed, do not open again.",
+      },
+    },
+  },
+  {
+    message: "WE MADE FIRST CONTACT",
+    prompt: "It is real, and it is here. Who do we tell?",
+    options: [
+      { id: "tell", label: "TELL EARTH" },
+      { id: "secret", label: "KEEP IT SECRET" },
+    ],
+    endings: {
+      tell: {
+        headline: "EARTH IS TOLD",
+        detail:
+          "The message goes out to every receiver on the homeworld. Tonight, everyone looks up at the same sky — and it looks back. Nothing will be the same.",
+      },
+      secret: {
+        headline: "THE SECRET IS KEPT",
+        detail:
+          "The stations agree to hold the truth close. Somewhere out there, something waits for a world that isn't ready to know it exists. Not yet.",
       },
     },
   },
@@ -122,31 +126,31 @@ export const ROUND_META = [
   {
     title: "First Contact",
     storyBeat:
-      "A faint alien signal breaks through static. Your ground station is the first to lock on. Decode the opening transmission.",
+      "Decades of static — then this. The first symbols of something that is not human. Read them.",
     timeLimitSec: 300,
   },
   {
     title: "The Beacon Replies",
     storyBeat:
-      "Something on the other end is responding. The signal has shifted frequency — your dial can find the offset.",
+      "It heard you. The reply comes shifted in frequency — roll the dial to bring it home.",
     timeLimitSec: 300,
   },
   {
     title: "False Signals",
     storyBeat:
-      "Three orders arrive at once — but one is a forgery meant to sabotage you. Decode all three and flag the impostor.",
+      "Three orders arrive at once. One is a forgery meant to turn us against them. Decode all three and transmit the fake one back.",
     timeLimitSec: 360,
   },
   {
     title: "A Hidden Key",
     storyBeat:
-      "This layer won't yield without a keyword. Solve the console's puzzle to derive it — the message beneath is a warning.",
+      "This layer is sealed. Solve the console to lift the keyword — the warning beneath was meant only for us.",
     timeLimitSec: 420,
   },
   {
     title: "The Last Transmission",
     storyBeat:
-      "One final message in an ancient hand. Decode it — then your station must decide how to answer.",
-    timeLimitSec: 360,
+      "One final message, in their oldest hand — a cipher within a cipher. Decode it. Then your station decides how humanity answers.",
+    timeLimitSec: 420,
   },
 ] as const;

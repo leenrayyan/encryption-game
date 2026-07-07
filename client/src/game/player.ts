@@ -103,6 +103,7 @@ export interface PlayerView {
   log: LogEntry[];
   draft: string;
   feedback: { result: "locked" | "rejected"; at: number } | null;
+  choice: { id: string } | null;
   ending: EndingSummary | null;
 }
 
@@ -124,6 +125,7 @@ export function subscribePlayer(
     log: [],
     draft: "",
     feedback: null,
+    choice: null,
     ending: null,
   };
   const emit = () => cb({ ...view });
@@ -186,6 +188,10 @@ function attachTeamListeners(
     }),
     onValue(base(code, `feedback/${teamId}`), (s) => {
       view.feedback = s.val();
+      emit();
+    }),
+    onValue(base(code, `choice/${teamId}`), (s) => {
+      view.choice = s.val();
       emit();
     }),
     onValue(base(code, `drafts/${teamId}`), (s) => {

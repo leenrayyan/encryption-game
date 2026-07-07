@@ -6,6 +6,7 @@ export default function AnswerBox({
   decision,
   draft,
   feedback,
+  chosenId,
   onDraft,
   onSubmit,
 }: {
@@ -13,20 +14,20 @@ export default function AnswerBox({
   decision: Decision | null;
   draft: string;
   feedback: { result: "locked" | "rejected"; at: number } | null;
+  chosenId?: string | null;
   onDraft: (value: string) => void;
   onSubmit: (answer: string) => void;
 }) {
   const [local, setLocal] = useState(draft);
   const [flash, setFlash] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [pickedLocal, setPickedLocal] = useState<string | null>(null);
   const editingRef = useRef(false);
+  const picked = pickedLocal ?? chosenId ?? null;
 
-  // Keep in sync with a teammate's typing unless we're actively editing.
   useEffect(() => {
     if (!editingRef.current) setLocal(draft);
   }, [draft]);
 
-  // Show a flash when the brain rejects a submission.
   useEffect(() => {
     if (feedback?.result === "rejected") {
       setFlash("Signal rejected — try again.");
@@ -41,19 +42,22 @@ export default function AnswerBox({
     onDraft(value);
   }
 
-  if (decision) {
+  const branching = !!decision?.branching;
+
+  // Finale: after the message is decoded (locked), present the branching choice.
+  if (branching && locked) {
     return (
       <div className="panel stack">
-        <h3>{decision.branching ? "Your Decision" : "Flag the Impostor"}</h3>
-        <p>{decision.prompt}</p>
+        <p className="accent">TRANSMISSION DECODED ✓</p>
+        <h3>{decision!.prompt}</h3>
         <div className="row">
-          {decision.options.map((o) => (
+          {decision!.options.map((o) => (
             <button
               key={o.id}
               className={picked === o.id ? "primary" : ""}
-              disabled={locked}
+              disabled={!!picked}
               onClick={() => {
-                setPicked(o.id);
+                setPickedLocal(o.id);
                 onSubmit(o.id);
               }}
               style={{ flex: 1, minWidth: 120 }}
@@ -62,12 +66,12 @@ export default function AnswerBox({
             </button>
           ))}
         </div>
-        {flash && <p className="warn">{flash}</p>}
-        {locked && <p className="accent">SIGNAL LOCKED ✓</p>}
+        {picked && <p className="dim">Reply transmitted. Awaiting the fleet…</p>}
       </div>
     );
   }
 
+  // Decode-and-type (rounds 1–4, and the finale before it's decoded).
   return (
     <div className="panel stack">
       <h3>Decoded Message</h3>

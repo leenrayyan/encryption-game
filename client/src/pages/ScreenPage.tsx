@@ -99,6 +99,7 @@ export default function ScreenPage() {
             <div className="row center" style={{ gap: "0.8rem", fontSize: "1.3rem" }}>
               <span className="dim">Next transmission in</span>
               <Timer endsAtMs={view.meta.nextStartsAtMs} />
+              <button onClick={() => brainSingleton?.advance()}>Skip →</button>
             </div>
           ) : (
             <p className="dim">Preparing the next transmission.</p>

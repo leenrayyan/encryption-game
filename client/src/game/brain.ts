@@ -190,12 +190,15 @@ export class BrainEngine {
         decision: instance.decision,
         correctAnswer: null,
       });
+      team.finalChoice = undefined;
       update(this.path(`teams/${team.id}`), {
         locked: false,
         attempts: 0,
         lockedAtMs: null,
       });
       remove(this.path(`feedback/${team.id}`));
+      remove(this.path(`drafts/${team.id}`)); // don't carry a draft into the next round
+      remove(this.path(`choice/${team.id}`));
     }
 
     set(this.path("meta"), {
@@ -216,11 +219,31 @@ export class BrainEngine {
   private handleSubmission(teamId: string, answer: string): void {
     if (this.status !== "in_round") return;
     const team = this.teams.get(teamId);
-    if (!team || team.locked || !team.instance) return;
+    if (!team || !team.instance) return;
+    const inst = team.instance;
 
+    // Once decoded (locked), a branching round takes a CHOICE submission (the
+    // ending beat). It records the branch but doesn't re-score.
+    if (team.locked) {
+      if (inst.branching && inst.decision) {
+        const norm = normalizeAnswer(answer);
+        const opt = inst.decision.options.find(
+          (o) => o.id === answer || normalizeAnswer(o.id) === norm
+        );
+        if (opt) {
+          team.finalChoice = normalizeAnswer(opt.id);
+          set(this.path(`choice/${teamId}`), { id: opt.id, at: Date.now() });
+          if (this.allDone()) this.endRound();
+        }
+      }
+      return;
+    }
+
+    // Not locked → validate the decode (space-insensitive for the Playfair finale).
     const normalized = normalizeAnswer(answer);
-    if (team.instance.accept.includes(normalized)) {
-      if (team.instance.branching) team.finalChoice = normalized;
+    const matches =
+      inst.accept.includes(normalized) || inst.accept.includes(normalized.replace(/ /g, ""));
+    if (matches) {
       const elapsedSec = Math.max(
         0,
         Math.floor((Date.now() - (this.roundEndsAtMs - this.currentLimitMs())) / 1000)
@@ -238,12 +261,20 @@ export class BrainEngine {
         score: team.score,
       });
       set(this.path(`feedback/${teamId}`), { result: "locked", at: Date.now() });
-      if ([...this.teams.values()].every((t) => t.locked)) this.endRound();
+      // Non-branching rounds finish on lock; branching waits for the choice.
+      if (!inst.branching && this.allDone()) this.endRound();
     } else {
       team.attempts += 1;
       update(this.path(`teams/${teamId}`), { attempts: team.attempts });
       set(this.path(`feedback/${teamId}`), { result: "rejected", at: Date.now() });
     }
+  }
+
+  /** A team is done when it's locked — and, for the branching finale, has chosen. */
+  private allDone(): boolean {
+    return [...this.teams.values()].every((t) =>
+      t.instance?.branching ? t.locked && !!t.finalChoice : t.locked
+    );
   }
 
   private endRound(): void {

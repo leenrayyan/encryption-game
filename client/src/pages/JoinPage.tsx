@@ -28,6 +28,7 @@ const empty: PlayerView = {
   log: [],
   draft: "",
   feedback: null,
+  choice: null,
   ending: null,
 };
 
@@ -131,10 +132,12 @@ export default function JoinPage() {
           <p className="dim">{view.meta.storyBeat}</p>
           <RoundRenderer operator={view.operator} crypto={view.crypto} isSolo={role === "solo"} />
           <AnswerBox
+            key={view.meta.roundIndex}
             locked={!!myTeam?.locked}
             decision={view.decision}
             draft={view.draft}
             feedback={view.feedback}
+            chosenId={view.choice?.id ?? null}
             onDraft={(v) => view.teamId && updateDraft(code, view.teamId, v)}
             onSubmit={(a) => view.teamId && submitAnswer(code, view.teamId, a)}
           />

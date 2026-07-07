@@ -1,18 +1,17 @@
 import type { CryptoPayload, OperatorPayload } from "@signal-lock/shared";
-import { glyphChar } from "../glyphs";
 import { PigpenGlyph, PigpenKey } from "./Pigpen";
 
 function OperatorView({ payload }: { payload: OperatorPayload }) {
   switch (payload.kind) {
-    case "glyph-substitution":
+    case "pigpen":
       return (
         <div className="panel stack">
           <h3>Incoming Signal</h3>
-          <div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "center" }}>
             {payload.words.map((word, wi) => (
-              <span className="glyph-word" key={wi}>
-                {word.map((g, gi) => (
-                  <span className="glyph" key={gi}>{glyphChar(g)}</span>
+              <span key={wi} style={{ display: "inline-flex", gap: "0.2rem", marginRight: "0.6rem" }}>
+                {word.map((letter, li) => (
+                  <PigpenGlyph key={li} letter={letter} size={38} />
                 ))}
               </span>
             ))}
@@ -47,19 +46,14 @@ function OperatorView({ payload }: { payload: OperatorPayload }) {
           <div className="cipher-text">{payload.ciphertext}</div>
         </div>
       );
-    case "pigpen-final":
+    case "playfair":
       return (
         <div className="panel stack">
           <h3>The Last Transmission</h3>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "center" }}>
-            {payload.words.map((word, wi) => (
-              <span key={wi} style={{ display: "inline-flex", gap: "0.2rem", marginRight: "0.6rem" }}>
-                {word.map((letter, li) => (
-                  <PigpenGlyph key={li} letter={letter} size={38} />
-                ))}
-              </span>
-            ))}
+          <div className="cipher-text" style={{ fontSize: "1.5rem", wordSpacing: "0.5em" }}>
+            {payload.pairs.join(" ")}
           </div>
+          <p className="dim">The signal arrives in letter pairs.</p>
         </div>
       );
   }
@@ -67,18 +61,12 @@ function OperatorView({ payload }: { payload: OperatorPayload }) {
 
 function CryptoView({ payload }: { payload: CryptoPayload }) {
   switch (payload.kind) {
-    case "glyph-substitution":
+    case "pigpen":
       return (
         <div className="panel stack">
-          <h3>Decryption Legend</h3>
-          <div className="legend-grid">
-            {Object.entries(payload.legend).map(([glyphId, letter]) => (
-              <div className="legend-cell" key={glyphId}>
-                <span className="glyph">{glyphChar(glyphId)}</span>
-                <span className="letter">{letter}</span>
-              </div>
-            ))}
-          </div>
+          <h3>Pigpen Key</h3>
+          <p className="dim">{payload.note}</p>
+          <PigpenKey />
         </div>
       );
     case "shift-cipher":
@@ -124,12 +112,25 @@ function CryptoView({ payload }: { payload: CryptoPayload }) {
           <p className="dim">Give your Operator the keyword. Repeat it under the ciphertext letters and subtract.</p>
         </div>
       );
-    case "pigpen-final":
+    case "playfair":
       return (
         <div className="panel stack">
-          <h3>Pigpen Key</h3>
-          <p className="dim">{payload.note}</p>
-          <PigpenKey />
+          <h3>Playfair Key Square</h3>
+          <table className="grid-table">
+            <tbody>
+              {payload.square.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((letter, ci) => (
+                    <td key={ci}>{letter === "I" ? "I/J" : letter}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="panel" style={{ background: "var(--bg-panel-2)", borderColor: "var(--accent-2)" }}>
+            <span className="accent">Decode rules: </span>
+            {payload.note}
+          </div>
         </div>
       );
   }

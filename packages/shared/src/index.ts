@@ -3,11 +3,11 @@
 export type Role = "operator" | "cryptographer" | "solo";
 
 export type RoundKind =
-  | "glyph-substitution"
+  | "pigpen"
   | "shift-cipher"
   | "trap-signal"
   | "keyed-layer"
-  | "pigpen-final";
+  | "playfair";
 
 export type SessionStatus = "lobby" | "in_round" | "round_result" | "finished";
 
@@ -51,15 +51,15 @@ export interface Decision {
 // Each round kind has an Operator payload (the raw signal) and a
 // Cryptographer payload (the tools to decode it). Solo players receive both.
 
-export interface GlyphSubstitutionOperatorPayload {
-  kind: "glyph-substitution";
-  /** Sequence of glyph ids grouped into words, e.g. [["g3","g1"],["g9"]] */
+/** Round 1 — Pigpen cipher; letters rendered client-side as pigpen glyphs. */
+export interface PigpenOperatorPayload {
+  kind: "pigpen";
+  /** words as letters; the client renders each letter as a pigpen symbol */
   words: string[][];
 }
-export interface GlyphSubstitutionCryptoPayload {
-  kind: "glyph-substitution";
-  /** glyph id -> letter, full mapping for the alphabet used in this message */
-  legend: Record<string, string>;
+export interface PigpenCryptoPayload {
+  kind: "pigpen";
+  note: string; // guidance; the standard pigpen key chart is drawn client-side
 }
 
 export interface ShiftCipherOperatorPayload {
@@ -98,30 +98,32 @@ export interface KeyedLayerCryptoPayload {
   puzzleHint: string;
 }
 
-/** Round 5 — Pigpen cipher; letters rendered client-side as pigpen glyphs. */
-export interface PigpenFinalOperatorPayload {
-  kind: "pigpen-final";
-  /** words as letters; the client renders each letter as a pigpen symbol */
-  words: string[][];
+/** Round 5 — Playfair cipher; a serious digraph cipher for the finale. */
+export interface PlayfairOperatorPayload {
+  kind: "playfair";
+  /** ciphertext split into two-letter groups, e.g. ["XG","QO","BM"] */
+  pairs: string[];
 }
-export interface PigpenFinalCryptoPayload {
-  kind: "pigpen-final";
-  note: string; // guidance; the standard pigpen key chart is drawn client-side
+export interface PlayfairCryptoPayload {
+  kind: "playfair";
+  /** the 5x5 key square (I/J share a cell) */
+  square: string[][];
+  note: string; // the decode rules
 }
 
 export type OperatorPayload =
-  | GlyphSubstitutionOperatorPayload
+  | PigpenOperatorPayload
   | ShiftCipherOperatorPayload
   | TrapSignalOperatorPayload
   | KeyedLayerOperatorPayload
-  | PigpenFinalOperatorPayload;
+  | PlayfairOperatorPayload;
 
 export type CryptoPayload =
-  | GlyphSubstitutionCryptoPayload
+  | PigpenCryptoPayload
   | ShiftCipherCryptoPayload
   | TrapSignalCryptoPayload
   | KeyedLayerCryptoPayload
-  | PigpenFinalCryptoPayload;
+  | PlayfairCryptoPayload;
 
 export interface RoundBroadcast {
   roundIndex: number; // 0-based

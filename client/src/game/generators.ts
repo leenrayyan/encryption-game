@@ -7,6 +7,7 @@ import {
   ROUND3_IMPOSTOR,
   ROUND4_KEYWORDS,
   ROUND4_PHRASES,
+  PLAYFAIR_KEYWORDS,
   ROUND5_SCENARIOS,
 } from "./pools";
 
@@ -15,13 +16,13 @@ const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 export interface RoundInstance {
   operator: OperatorPayload;
   crypto: CryptoPayload;
-  /** the canonical correct answer (a phrase, or a decision option id) */
+  /** the canonical correct answer (the decoded phrase) */
   answer: string;
-  /** all accepted answers, normalized; defaults to [answer] */
+  /** all accepted answers, normalized */
   accept: string[];
-  /** a decode-then-decide prompt shown to the player, if any */
+  /** a decode-then-decide prompt (round 5 branch), shown after a correct decode */
   decision: Decision | null;
-  /** true when any accepted answer is fine and we only record the branch */
+  /** true when the decision only records a branch (finale ending), not scored */
   branching: boolean;
 }
 
@@ -32,7 +33,6 @@ export function normalizeAnswer(s: string): string {
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)] as T;
 }
-
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -41,42 +41,32 @@ function shuffle<T>(arr: T[]): T[] {
   }
   return copy;
 }
-
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// ---- Round 1: glyph substitution ----
-export function generateGlyphSubstitution(): RoundInstance {
+// ---- Round 1: Pigpen (visual warm-up) ----
+export function generatePigpen(): RoundInstance {
   const phrase = pick(ROUND1_PHRASES);
-  const shuffledLetters = shuffle(ALPHABET.split(""));
-  const letterToGlyph = new Map<string, string>();
-  const legend: Record<string, string> = {};
-  shuffledLetters.forEach((letter, i) => {
-    const glyphId = `g${i}`;
-    letterToGlyph.set(letter, glyphId);
-    legend[glyphId] = letter;
-  });
-
-  const words = phrase.split(" ").map((word) =>
-    word.split("").map((letter) => letterToGlyph.get(letter) as string)
-  );
-
+  const words = phrase.split(" ").map((w) => w.split(""));
   return simple(
-    { kind: "glyph-substitution", words },
-    { kind: "glyph-substitution", legend },
+    { kind: "pigpen", words },
+    {
+      kind: "pigpen",
+      note: "Use the Pigpen key below to translate the symbols your Operator sees.",
+    },
     phrase
   );
 }
 
-// ---- Round 2: shift cipher (clear, single-step derived offset) ----
+// ---- Round 2: shift cipher ----
 const DIAL_CLUE_TEMPLATES = [
   (a: number, b: number) =>
-    `Two nav readings blink on the console: ${a} and ${b}. Add them for your dial offset, then shift each letter backward by that number.`,
+    `The signal is rolled forward on the alphabet. Two nav readings blink: ${a} and ${b}. Add them — that's the shift. Move every letter BACKWARD by that many to read it (e.g. shift 3: D→A).`,
   (a: number, b: number) =>
-    `The array drifted ${a} sectors, then ${b} more. Sum the drift — that's how far to roll the signal back.`,
+    `The array drifted ${a} sectors, then ${b} more. Sum the drift, then walk each letter backward through the alphabet by that number (shift 3: D→A) to recover the message.`,
   (a: number, b: number) =>
-    `Fuel gauges read ${a} and ${b}. Their total is the shift; subtract it from every letter to decode.`,
+    `Fuel gauges read ${a} and ${b}. Their total is how far the alphabet was pushed forward — subtract it from every letter (shift 3: D→A) to decode.`,
 ];
 
 export function generateShiftCipher(): RoundInstance {
@@ -86,25 +76,19 @@ export function generateShiftCipher(): RoundInstance {
   const b = shift - a;
   const ciphertext = phrase
     .split("")
-    .map((ch) => {
-      if (ch === " ") return " ";
-      const idx = ALPHABET.indexOf(ch);
-      return ALPHABET[(idx + shift) % 26];
-    })
+    .map((ch) => (ch === " " ? " " : ALPHABET[(ALPHABET.indexOf(ch) + shift) % 26]))
     .join("");
-
-  const dialClueText = pick(DIAL_CLUE_TEMPLATES)(a, b);
-
   return simple(
     { kind: "shift-cipher", ciphertext },
-    { kind: "shift-cipher", dialClueText },
+    { kind: "shift-cipher", dialClueText: pick(DIAL_CLUE_TEMPLATES)(a, b) },
     phrase
   );
 }
 
-// ---- Round 3: trap-signal (decode three, flag the impostor) ----
+// ---- Round 3: trap-signal (decode three, TYPE the impostor's order) ----
 const ROW_LABELS = ["A", "B", "C", "D", "E"];
 const COL_LABELS = ["1", "2", "3", "4", "5", "6"];
+const WORD_BREAK = "/";
 
 function buildGrid(): { grid: string[][]; coordOf: Map<string, string> } {
   const shuffledLetters = shuffle(ALPHABET.split(""));
@@ -112,22 +96,17 @@ function buildGrid(): { grid: string[][]; coordOf: Map<string, string> } {
   let cursor = 0;
   for (let r = 0; r < 5; r++) {
     const row: string[] = [];
-    for (let c = 0; c < 6; c++) {
-      row.push(cursor < 26 ? (shuffledLetters[cursor++] as string) : "*");
-    }
+    for (let c = 0; c < 6; c++) row.push(cursor < 26 ? (shuffledLetters[cursor++] as string) : "*");
     grid.push(row);
   }
   const coordOf = new Map<string, string>();
-  for (let r = 0; r < 5; r++) {
+  for (let r = 0; r < 5; r++)
     for (let c = 0; c < 6; c++) {
       const letter = grid[r]![c]!;
       if (letter !== "*") coordOf.set(letter, `${ROW_LABELS[r]}${COL_LABELS[c]}`);
     }
-  }
   return { grid, coordOf };
 }
-
-const WORD_BREAK = "/";
 
 function encodeToCoords(text: string, coordOf: Map<string, string>): string[] {
   const words = text.split(" ");
@@ -150,21 +129,8 @@ export function generateTrapSignal(): RoundInstance {
     `${codeword} ${genuinePair[1]}`,
     impostor,
   ];
-  const order = shuffle([0, 1, 2]);
-  const arranged = order.map((i) => messages[i] as string);
-  const impostorSlot = order.indexOf(2);
-
+  const arranged = shuffle(messages);
   const signals = arranged.map((m) => encodeToCoords(m, coordOf));
-
-  const decision: Decision = {
-    prompt: "One order is a forgery. Which signal is the impostor?",
-    options: [
-      { id: "1", label: "Signal 1" },
-      { id: "2", label: "Signal 2" },
-      { id: "3", label: "Signal 3" },
-    ],
-    branching: false,
-  };
 
   return {
     operator: { kind: "trap-signal", signals },
@@ -173,11 +139,11 @@ export function generateTrapSignal(): RoundInstance {
       rowLabels: ROW_LABELS,
       colLabels: COL_LABELS,
       grid,
-      briefing: `Command authenticates every genuine order with the codeword "${codeword}". The impostor won't have it. Decode all three, then flag the one missing the codeword.`,
+      briefing: `Command signs every genuine order with the codeword "${codeword}". The forgery won't have it. Decode all three, then type the fake order — the one missing the codeword — exactly as it reads.`,
     },
-    answer: String(impostorSlot + 1),
-    accept: [String(impostorSlot + 1)],
-    decision,
+    answer: normalizeAnswer(impostor),
+    accept: [normalizeAnswer(impostor)],
+    decision: null,
     branching: false,
   };
 }
@@ -187,75 +153,107 @@ function arithmeticFor(target: number): string {
   const kind = randInt(0, 2);
   if (kind === 0) {
     const a = randInt(1, target);
-    const b = target - a;
-    return b >= 0 ? `${a} + ${b}` : `${target}`;
+    return `${a} + ${target - a}`;
   }
-  if (kind === 1 && target % 2 === 0) {
-    return `${target / 2} x 2`;
-  }
+  if (kind === 1 && target % 2 === 0) return `${target / 2} x 2`;
   const a = randInt(target + 1, target + 10);
-  const b = a - target;
-  return `${a} - ${b}`;
+  return `${a} - ${a - target}`;
 }
 
 export function generateKeyedLayer(): RoundInstance {
   const phrase = pick(ROUND4_PHRASES);
   const keyword = pick(ROUND4_KEYWORDS);
-
-  const puzzleParts = keyword.split("").map((letter) => {
-    const target = ALPHABET.indexOf(letter) + 1;
-    return `${arithmeticFor(target)} = ?`;
-  });
-  const puzzleText = puzzleParts.join("   |   ");
-  const puzzleHint = "Solve each, convert number to letter (A=1, B=2 ... Z=26), read in order.";
-
+  const puzzleText = keyword
+    .split("")
+    .map((letter) => `${arithmeticFor(ALPHABET.indexOf(letter) + 1)} = ?`)
+    .join("   |   ");
   const ciphertext = phrase
     .split("")
     .map((ch, i) => {
       if (ch === " ") return " ";
-      const keyLetter = keyword[i % keyword.length] as string;
-      const shift = ALPHABET.indexOf(keyLetter);
-      const idx = ALPHABET.indexOf(ch);
-      return ALPHABET[(idx + shift) % 26];
+      const shift = ALPHABET.indexOf(keyword[i % keyword.length] as string);
+      return ALPHABET[(ALPHABET.indexOf(ch) + shift) % 26];
     })
     .join("");
-
   return simple(
     { kind: "keyed-layer", ciphertext },
-    { kind: "keyed-layer", puzzleText, puzzleHint },
+    {
+      kind: "keyed-layer",
+      puzzleText,
+      puzzleHint: "Solve each, convert number to letter (A=1, B=2 ... Z=26), read in order.",
+    },
     phrase
   );
 }
 
-// ---- Round 5: pigpen finale (visual cipher + branching choice) ----
-export function generatePigpenFinal(scenarioIndex: number): RoundInstance {
+// ---- Round 5: Playfair finale (serious digraph cipher + branching ending) ----
+function buildPlayfairSquare(keyword: string): string[][] {
+  const seen = new Set<string>();
+  const letters: string[] = [];
+  for (const ch of (keyword + "ABCDEFGHIKLMNOPQRSTUVWXYZ").toUpperCase()) {
+    const c = ch === "J" ? "I" : ch;
+    if (c >= "A" && c <= "Z" && !seen.has(c)) {
+      seen.add(c);
+      letters.push(c);
+    }
+  }
+  const square: string[][] = [];
+  for (let r = 0; r < 5; r++) square.push(letters.slice(r * 5, r * 5 + 5));
+  return square;
+}
+
+function playfairEncode(plain: string, square: string[][]): string[] {
+  const pos = new Map<string, [number, number]>();
+  square.forEach((row, r) => row.forEach((ch, c) => pos.set(ch, [r, c])));
+  const pairs: string[] = [];
+  for (let i = 0; i < plain.length; i += 2) {
+    const [ra, ca] = pos.get(plain[i] as string) as [number, number];
+    const [rb, cb] = pos.get(plain[i + 1] as string) as [number, number];
+    let ea: string, eb: string;
+    if (ra === rb) {
+      ea = square[ra]![(ca + 1) % 5]!;
+      eb = square[rb]![(cb + 1) % 5]!;
+    } else if (ca === cb) {
+      ea = square[(ra + 1) % 5]![ca]!;
+      eb = square[(rb + 1) % 5]![cb]!;
+    } else {
+      ea = square[ra]![cb]!;
+      eb = square[rb]![ca]!;
+    }
+    pairs.push(ea + eb);
+  }
+  return pairs;
+}
+
+export function generatePlayfairFinal(scenarioIndex: number): RoundInstance {
   const scenario = ROUND5_SCENARIOS[scenarioIndex % ROUND5_SCENARIOS.length]!;
-  const words = scenario.message.split(" ").map((w) => w.split(""));
+  const keyword = pick(PLAYFAIR_KEYWORDS);
+  const square = buildPlayfairSquare(keyword);
+  const plain = scenario.message.replace(/[^A-Za-z]/g, "").toUpperCase().replace(/J/g, "I");
+  const pairs = playfairEncode(plain, square);
 
   const decision: Decision = {
     prompt: scenario.prompt,
     options: scenario.options,
     branching: true,
   };
-
+  const normalized = normalizeAnswer(scenario.message);
   return {
-    operator: { kind: "pigpen-final", words },
+    operator: { kind: "playfair", pairs },
     crypto: {
-      kind: "pigpen-final",
-      note: "Use the Pigpen key below to translate the symbols your Operator sees, then decide together.",
+      kind: "playfair",
+      square,
+      note:
+        "Split the signal into its letter pairs. For each pair, find both letters in the grid: same ROW → take the letter to the LEFT of each (wrap around); same COLUMN → take the letter ABOVE each (wrap); otherwise → keep each letter's row but swap to the other's column. Read the result.",
     },
-    answer: scenario.message,
-    accept: scenario.options.map((o) => normalizeAnswer(o.id)),
+    answer: normalized,
+    accept: [normalized, normalized.replace(/ /g, "")],
     decision,
     branching: true,
   };
 }
 
-function simple(
-  operator: OperatorPayload,
-  crypto: CryptoPayload,
-  phrase: string
-): RoundInstance {
+function simple(operator: OperatorPayload, crypto: CryptoPayload, phrase: string): RoundInstance {
   const answer = normalizeAnswer(phrase);
   return { operator, crypto, answer, accept: [answer], decision: null, branching: false };
 }
@@ -263,7 +261,7 @@ function simple(
 export function generateRound(roundIndex: number, finaleScenarioIndex: number): RoundInstance {
   switch (roundIndex) {
     case 0:
-      return generateGlyphSubstitution();
+      return generatePigpen();
     case 1:
       return generateShiftCipher();
     case 2:
@@ -271,7 +269,7 @@ export function generateRound(roundIndex: number, finaleScenarioIndex: number): 
     case 3:
       return generateKeyedLayer();
     case 4:
-      return generatePigpenFinal(finaleScenarioIndex);
+      return generatePlayfairFinal(finaleScenarioIndex);
     default:
       throw new Error(`No generator for round ${roundIndex}`);
   }
